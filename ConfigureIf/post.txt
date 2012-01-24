@@ -1,11 +1,11 @@
 <h2>Controlling component registration with ConfigureIf</h2>
 
 <p>
-	When using castle windsor every so often I come across a scenario where I want a subset of the components to be registered differently based on something like a certain Attribute being present or a value in configuration being set. Fortunately Castle Windsor provides functionality to do this via the ConfigureIf method, ConfigureIf executes a provided predicate and can apply different configuration based on the result of evaluation the predicate.
+	When using Castle Windsor every so often I come across a scenario where I want a subset of the components to be registered differently based on something like a certain Attribute being present or a value in configuration being set. Fortunately Castle Windsor provides functionality to do this via the ConfigureIf method, ConfigureIf executes a provided predicate and can apply different configuration based on the result of evaluating the predicate.
 	
-	The scenario I'll use to demonstrate this is as follows; for certain pages on our website we need to audit the requests.
+	The scenario I'll use to demonstrate this is as follows; for certain pages on our website we need to audit the request.
 	
-	To perform the auditing we will use an <a href="http://stw.castleproject.org/Windsor.Interceptors.ashx">interceptor</a>, using interceptors we are able intercept the method invocation both before and after execution, the code for the interceptor is as follows
+	To perform the auditing we will use an <a href="http://stw.castleproject.org/Windsor.Interceptors.ashx">Interceptor</a>, by using Interceptors we are able to intercept the method invocation both before and after execution, the code for the Interceptor is as follows
 </p>
 
 [sourcecode language="csharp"]
@@ -29,7 +29,7 @@
 [/sourcecode]
 
 <p>
-	To indicate that page requests should be audited we simply create an Attribute and apply it to the Controllers that serve pages that need to be audited, as follows
+	To indicate that requests to a page should be audited we simply create an Attribute and apply it to the Controller that serves the page, as follows
 </p>
 
 [sourcecode language="csharp"]
