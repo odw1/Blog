@@ -1,0 +1,73 @@
+<h2>Controlling component registration with ConfigureIf</h2>
+
+<p>
+	When using castle windsor every so often I come across a scenario where I want a subset of the components to be registered differently based on something like a certain Attribute being present or a value in configuration being set. Fortunately Castle Windsor provides functionality to do this via the ConfigureIf method, ConfigureIf executes a provided predicate and can apply different configuration based on the result of evaluation the predicate.
+	
+	The scenario I'll use to demostrate this is as follows; for certain pages on our website we need to audit the requests.
+	
+	To perform the auditing we will use an <a href="http://stw.castleproject.org/Windsor.Interceptors.ashx">interceptor</a>, using interceptors we are able intercept the method invocation both before and after execution, the code for the interceptor is as follows
+</p>
+
+[sourcecode language="csharp"]
+    public class AuditInterceptor : IInterceptor
+    {
+        public void Intercept(IInvocation invocation)
+        {
+            if (invocation.Method.Name == "OnActionExecuting")
+            {
+                AuditRequest(invocation);
+            }
+
+            invocation.Proceed();
+        }
+
+        public void AuditRequest(IInvocation invocation)
+        {
+            // Audit request details
+        }
+    }
+[/sourcecode]
+
+<p>
+	To indicate that page requests should be audited we simply create an Attribute and apply it to the Controllers that serve pages that need to be audited, as follows
+</p>
+
+[sourcecode language="csharp"]
+    public class RequiresAuditAttribute : Attribute
+    {
+        
+    }
+	
+	[RequiresAudit]
+    public class AccountController : Controller
+    {
+        public ActionResult Index()
+        {
+            return View();
+        }
+
+    }
+[/sourcecode]
+
+<p>
+	Next we get on to the interesting part, during component registration we use the ConfigureIf method to check if a Controller has the RequiresAuditAttribute and if so attach the AuditInterceptor
+</p>
+
+[sourcecode language="csharp"]
+    public class ControllersInstaller : IWindsorInstaller
+    {
+        public void Install(IWindsorContainer container, IConfigurationStore store)
+        {
+            container.Register(AllTypes.FromThisAssembly()
+                                   .BasedOn<IController>()
+                                   .If(Component.IsInSameNamespaceAs<HomeController>())
+                                   .If(t => t.Name.EndsWith("Controller"))
+                                   .Configure(c => c.LifestyleTransient())
+                                   .ConfigureIf(
+                                       c => c.Implementation.IsDefined(typeof (RequiresAuditAttribute), false),
+                                       c => c.Interceptors<AuditInterceptor>()));
+        }
+    }
+[/sourcecode]
+
+The code for this post is available on <a href="http://github.com/odw1/ASDSAFGASGASDGASG">github</a>.

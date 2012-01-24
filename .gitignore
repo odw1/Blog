@@ -1,0 +1,14 @@
+bin/
+obj/
+Drops/
+Build/
+_ReSharper.*
+*.csproj.user
+*.resharper.user
+*.resharper
+*.suo
+*.cache
+*.user
+~$*
+*.dotCover
+TestResult.xml
