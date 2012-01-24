@@ -3,7 +3,7 @@
 <p>
 	When using castle windsor every so often I come across a scenario where I want a subset of the components to be registered differently based on something like a certain Attribute being present or a value in configuration being set. Fortunately Castle Windsor provides functionality to do this via the ConfigureIf method, ConfigureIf executes a provided predicate and can apply different configuration based on the result of evaluation the predicate.
 	
-	The scenario I'll use to demostrate this is as follows; for certain pages on our website we need to audit the requests.
+	The scenario I'll use to demonstrate this is as follows; for certain pages on our website we need to audit the requests.
 	
 	To perform the auditing we will use an <a href="http://stw.castleproject.org/Windsor.Interceptors.ashx">interceptor</a>, using interceptors we are able intercept the method invocation both before and after execution, the code for the interceptor is as follows
 </p>
@@ -70,4 +70,4 @@
     }
 [/sourcecode]
 
-The code for this post is available on <a href="http://github.com/odw1/ASDSAFGASGASDGASG">github</a>.
+The code for this post is available on <a href="https://github.com/odw1/Blog/tree/master/ConfigureIf">github</a>.
