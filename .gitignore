@@ -12,3 +12,4 @@ _ReSharper.*
 ~$*
 *.dotCover
 TestResult.xml
+JsTestDriver/reports/

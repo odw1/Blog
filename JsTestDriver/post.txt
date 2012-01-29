@@ -1,0 +1,158 @@
+<p>
+	Currently my chosen JavaScript test framework is <a href="http://pivotal.github.com/jasmine/">Jasmine</a> and to automate the Jasmine tests, so they can be run via a script or as part of a CI build I use <a href="http://code.google.com/p/js-test-driver/">JsTestDriver</a>. In this post I'll provide a quick intro to Jasmine and then move on to JsTestDriver
+</p>
+
+<p>
+	Below is some simple JavaScript that I would like to test, it has the following functions;
+	<ul>
+		<li>addNumber, which simply adds two numbers and returns the result</li>
+		<li>displayPerson, which retrieves the specified person from a web service and tells the renderPerson function to display the retrieved person</li>
+		<li>renderPerson, which given a piece of JSON containing a Person displays that Persons first name and surname</li>
+	</ul>
+</p>
+
+[sourcecode language="javascript"]
+MyApp = {
+
+	addNumbers : function (a, b) {
+		var result = a + b;
+		return result;
+	},
+	
+	displayPerson : function(personId) {
+		$.getJSON('/People/' + personId, null, MyApp.renderPerson);
+	},
+	
+	renderPerson : function(data) {
+		$('#firstname').text(data.Person.Firstname);
+		$('#surname').text(data.Person.Surname);
+	}
+};
+[/sourcecode]
+
+<p>
+	Below are the tests for the code above, in my opinion Jasmine allows you to structure your JavaScript tests so that their intent is clear.
+	
+	One of the most powerful and useful features of Jasmine is <a href="https://github.com/pivotal/jasmine/wiki/Spies">Spies</a>, these allow you to mock/stub out functions, if you are from the .NET world they provide similar functionality to <a href="http://code.google.com/p/moq/">Moq</a> and <a href="http://hibernatingrhinos.com/open-source/rhino-mocks">Rhino Mocks</a>. The code below makes use of spies to stub out calls to JQuery's getJSON method so that tests do not call the actual service.
+	
+	Another useful feature is <a href="https://github.com/velesin/jasmine-jquery">Fixtures</a>, these allow you to load HTML into your tests, this is particularly useful when you want to verify that your code is correctly interacting with HTML elements, for example setting the text on a span with a specific id.
+</p>
+
+[sourcecode language="javascript"]
+describe('My App Tests', function () {
+
+    describe('when adding numbers', function () {
+
+        it('should add the two numbers', function () {
+			var result  = MyApp.addNumbers(5, 10);
+			expect(result).toEqual(15);
+        });
+	});
+	
+	describe('when displaying a person', function () {
+
+        it('should retrieve the person', function () {
+            spyOn($, 'getJSON');
+			
+			var personId = 354;
+            MyApp.displayPerson(personId);
+
+            expect($.getJSON).toHaveBeenCalledWith('/People/' + personId, null, jasmine.any(Function));
+        });
+
+        it('should render the results', function () {
+            var json = 'some data';
+
+            spyOn(MyApp, 'renderPerson');
+            spyOn($, 'getJSON').andCallFake(function (url, data, callback) { callback(json); });
+
+			var personId = 354;
+            MyApp.displayPerson(personId);
+
+            expect(MyApp.renderPerson).toHaveBeenCalledWith(json);
+        });
+	});
+	
+	describe('when rendering the person', function () {
+
+        beforeEach(function () {
+            setFixtures("<div><span id='firstname'/><span id='surname'/></div>");
+
+            var data = { "Person": { "Firstname": "fred", "Surname": "blogs" } };
+            MyApp.renderPerson(data);
+        });
+
+        it('should display the firstname', function () {
+            expect($('#firstname').text()).toEqual('fred');
+        });
+
+        it('should display the surname', function () {
+            expect($('#surname').text()).toEqual('blogs');
+        });
+    });
+});
+[/sourcecode]
+
+<p>
+	Jasmine tests are executed in a brower, you need to create a page which references the various Jasmine libraries, your code and tests and any libraries your application depends on. When you load this page all referenced tests are executed, the results are displayed as follows
+	
+	<img src="http://owainwragg.files.wordpress.com/2012/01/specrunnerouput2.png" />
+	
+	This way of running your tests is ok on your local development machine, but isn't that helpful if you want to run your tests via a script or as part of a CI build. This is where JsTestDriver can help, below I'll show how you can automated the execution of Jasmine tests with the help of JsTestDriver using PowerShell
+</p>
+
+<p>
+	In addition to downloading JsTestDriver you will also need to download the <a href="https://github.com/ibolmo/jasmine-jstd-adapter">Jasmine Adapter for JsTestDriver</a>. Firstly we need to tell JsTestDriver what port it can run on and what files it needs to load. To do this create a jsTestDriver.conf file, the one for this example is shown below
+</p>
+
+[sourcecode]
+server: http://localhost:9876
+
+load:
+  - lib/jasmine.js
+  - lib/jasmine-jquery-1.3.1.js
+  - lib/JasmineAdapter.js
+  - /lib/jquery-1.7.1.min.js
+  - src/code.js
+  
+test:
+  - tests/codeTests.js
+[/sourcecode]
+
+<p>
+	Next we need to create the PowerShell script that will start JsTestDriver and execute the tests; the script for this example is shown below. If you try to run this locally you will probably need to update the paths for example you might not have the Java Runtime Environment installed in the same place as me.
+	
+	To execute the script below assuming it is in a file named runJsTests.ps1 simply open PowerShell and type . .\runJsTests.ps1 and the following output should be shown
+	
+	<img src="http://owainwragg.files.wordpress.com/2012/01/testrun.png" />
+</p>
+
+[sourcecode language="powershell"]
+$rootDir = Resolve-Path .
+$java = "$env:ProgramFiles\Java\jre6\bin\java.exe"
+
+$firefox = "$env:ProgramFiles\Mozilla Firefox\firefox.exe"
+$ie = "$env:ProgramFiles\Internet Explorer\iexplore.exe"
+$chrome = "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+
+$jsUnitTestReportPath = Join-Path $rootDir "reports"
+$jsTestDriver = Join-Path $rootDir "JsTestDriver-1.3.3d.jar"
+
+function RunTests () {
+	exec { & $java -jar $jsTestDriver --port 9876 --config jsTestDriver.conf --browser "$firefox" --tests all --testOutput $jsUnitTestReportPath }
+}
+
+RunTests
+[/sourcecode]
+
+<p>
+	In the script above JsTestDriver is using fire fox as the browser when executing the tests, we can change this to any browser as long as we provide the path to the browsers executable, in addition JsTestDriver can use more than one browser when running the tests, for example if we wanted to run all the tests in fire fox, chrome and internet explorer simply change the browser parameter to
+	
+[sourcecode language="powershell"]
+--browser "$firefox, $chrome, $ie"
+[/sourcecode]
+	
+	If you want to run JavaScript unit tests as part of  a CI build JsTestDriver makes this possible, the testOutput parameter tells JsTestDriver to create JUnit compatible reports and to store them in the specified folder.
+	
+	The code for this post is available on <a href="https://github.com/odw1/Blog/tree/master/JsTestDriver">github</a>.
+</p>
