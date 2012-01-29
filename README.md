@@ -4,7 +4,7 @@ Blog source code
 
 ## ConfigureIf
 
-[Blog post](http://owainwragg.wordpress.com/2012/01/24/controlling-component-registration-with-configureif/) about using ConfigureIf when registering components using Castle Windsor
+[Blog post](http://owainwragg.wordpress.com/2012/01/24/controlling-component-registration-with-configureif/) about using ConfigureIf when registering components with Castle Windsor
 
 ## JsTestDriver
 
