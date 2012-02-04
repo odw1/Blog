@@ -1,0 +1,92 @@
+<p>
+	<a href="http://jslint.com/">JSLint</a> is a JavaScript program that checks your code against a set of rules, for example it checks that semicolons are not missing and that whitespace rules are adhered to. It is definitely worth using when developing JavaScript as it can save you hours of time tracking down issues caused by stupid syntax errors.
+	
+	It does however get a bit tedious pasting your code in to the form on the JSLint site and ideally it would be nice to run JSLint as part of an automated build so that your JavaScript is continuously checked and any errors cause the build to fail. To do this I've created a PowerShell script that uses <a href="http://code.google.com/p/jslint4java/">jslint4java</a>, jslint4java is a wrapper around JSLint which allows you to execute JSLint from the command line
+
+	The PowerShell script (runJSLint.ps1) is shown below. The script does the following
+	<ul>
+		<li>Gets the list of JavaScript files to check</li>
+		<li>Starts jslint4java passing it the list of files to check and specifies that it should produce a report in the same format as JUnit</li>
+		<li>Redirects the output to a specified file</li>
+	</ul>
+<p>
+
+[sourcecode language="powershell"]
+$rootDir = Resolve-Path .
+$java = "$env:ProgramFiles\Java\jre6\bin\java.exe"
+
+$jslintReportPath = Join-Path $rootDir "reports\jslintReport.txt"
+$jslint4Java = Join-Path $rootDir "jslint4java-2.0.1.jar"
+
+function RunJSLint () {
+	$filesToCheck = (Get-ChildItem "src" -Recurse -Include *.js)
+	
+	& $java -jar $jslint4Java $filesToCheck --report "junit" | Out-File $jslintReportPath
+}
+
+RunJSLint
+[/sourcecode]
+
+<p>
+	Now we have the means to execute JSLint we need to create some JavaScript to check, I've created two very simple files (code.js and moreCode.js) that contain JavaScript both are shown below.
+	
+	Both contain issues that JSLint will complain about; the first one is missing the "use strict" statement (John Resig has good explanation of StrictMode in the following <a href="http://ejohn.org/blog/ecmascript-5-strict-mode-json-and-more/">article</a>). Whilst the second one is missing a semicolon.
+</p>
+
+[sourcecode language="javascript"]
+var Thing = function (name) {
+	this.name = name;
+};
+[/sourcecode]
+
+[sourcecode language="javascript"]
+var AnotherThing = function (name) {
+	"use strict";
+	this.name = name
+};
+[/sourcecode]
+
+<p>
+	After running the PowerShell script, as follows
+	
+	<img src="http://owainwragg.files.wordpress.com/2012/02/run.png" />
+	
+	jslint4java produces a JUnit style report
+</p>
+
+[sourcecode language="xml"]
+<testsuites>
+<testsuite failures='1' time='0.012' skipped='0' errors='1' tests='1' name='D:\Work\blog\JSLint\src\code.js'><testcase time='0.012' classname='com.googlecode.jslint4java' name='D:\Work\blog\JSLint\src\code.js'><failure message='Found 1 problem' type='java.lang.AssertionError'>D:\Work\blog\JSLint\src\code.js:2:5:Missing 'use strict' statement.
+</failure></testcase></testsuite>
+<testsuite failures='1' time='0.008' skipped='0' errors='1' tests='1' name='D:\Work\blog\JSLint\src\moreCode.js'><testcase time='0.008' classname='com.googlecode.jslint4java' name='D:\Work\blog\JSLint\src\moreCode.js'><failure message='Found 1 problem' type='java.lang.AssertionError'>D:\Work\blog\JSLint\src\moreCode.js:3:21:Expected ';' and instead saw '}'.
+</failure></testcase></testsuite>
+</testsuites>
+[/sourcecode]
+
+<p>
+	As you can see the output is simple to read and what jslint4java has done is effectively create a unit test per file, and both tests have failed due to the issues described above. If we fix the JavaScript and re-run the script, a report is produced which again contains two tests, but this time round both have passed
+</p>
+
+[sourcecode language="xml"]
+<testsuites>
+<testsuite failures='0' time='0.013' skipped='0' errors='0' tests='1' name='D:\Work\blog\JSLint\src\code.js'><testcase time='0.013' classname='com.googlecode.jslint4java' name='D:\Work\blog\JSLint\src\code.js'></testcase></testsuite>
+<testsuite failures='0' time='0.009' skipped='0' errors='0' tests='1' name='D:\Work\blog\JSLint\src\moreCode.js'><testcase time='0.009' classname='com.googlecode.jslint4java' name='D:\Work\blog\JSLint\src\moreCode.js'></testcase></testsuite>
+</testsuites>
+[/sourcecode]
+
+<p>
+	There will be times when you don't want to enforce all of JSLints rules, jslint4java makes this very easy as you can simply pass a parameter (details of all the parameters are available <a href="http://docs.jslint4java.googlecode.com/git/2.0.1/cli.html">here</a>) to it which turns a check off, so for example if we don't want to enforce the use of "use strict" you can pass it the "sloppy" parameters as follows
+</p>
+
+[sourcecode language="powershell"]
+function RunJSLint () {
+	$filesToCheck = (Get-ChildItem "src" -Recurse -Include *.js)
+	
+	& $java -jar $jslint4Java $filesToCheck --report "junit" --sloppy | Out-File $jslintReportPath
+}
+
+RunJSLint
+[/sourcecode]
+
+The code for this post is available on <a href="https://github.com/odw1/Blog/tree/master/JSLint">github</a>.
+
