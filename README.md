@@ -12,4 +12,4 @@ Blog source code
 
 ##JSLint
 
-[Blog post](http://owainwragg.wordpress.com/2012/02/04/automating-jsl…ith-powershell/) which shows how to automate JSLint with PowerShell and jslint4java
+[Blog post](http://owainwragg.wordpress.com/2012/02/04/automating-jslint-with-powershell/) which shows how to automate JSLint with PowerShell and jslint4java
