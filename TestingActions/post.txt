@@ -1,0 +1,185 @@
+<p>
+	I was asked by a colleague this week how I approach unit testing code that makes use of <a href="http://msdn.microsoft.com/en-us/library/018hxwa8.aspx">Actions</a>, this post shows how I approach this.
+	
+	Shown below are the OrderProcessor and OrderBatcher classes. The OrderProcessor is responsible for processing orders and can be told to process orders in batches, when processing in batches the OrderProcessor supplies the OrderBatcher a list of orders that require batching and an Action to execute when processing each batch. The OrderBatcher batches the orders and executes the supplied Action for each batch.
+</p>
+
+[sourcecode language="csharp" highlight="18,19,20,21,22,24"]
+    public class OrderProcessor
+    {
+        private readonly IOrderBatcher _orderBatcher;
+        private readonly IOrderSender _orderSender;
+        private readonly IOrderRecorder _orderRecorder;
+
+        public OrderProcessor(IOrderBatcher orderBatcher, IOrderSender orderSender, IOrderRecorder orderRecorder)
+        {
+            _orderBatcher = orderBatcher;
+            _orderSender = orderSender;
+            _orderRecorder = orderRecorder;
+        }
+
+        public void Process(List<Order> orders, bool processInBatches)
+        {
+            if (processInBatches)
+            {
+                Action<List<Order>> batchProcessor = batchedOrders =>
+                                                         {
+                                                             _orderSender.Send(batchedOrders);
+                                                             batchedOrders.ForEach(x => _orderRecorder.OrderSent(x));
+                                                         };
+
+                _orderBatcher.ProcessBatches(orders, batchProcessor);
+            }
+            else
+            {
+                foreach (var order in orders)
+                {
+                    _orderSender.Send(order);
+                    _orderRecorder.OrderSent(order);
+                }
+            }
+        }
+    }
+[/sourcecode]
+
+[sourcecode language="csharp" highlight="21"]
+    public class OrderBatcher : IOrderBatcher
+    {
+        private readonly int _batchSize = 5;
+
+        public void ProcessBatches(List<Order> orders, Action<List<Order>> batchProcessor)
+        {
+            var batches = new List<List<Order>>();
+
+            while (true)
+            {
+                var batch = orders.Skip(batches.Count * _batchSize).Take(_batchSize).ToList();
+
+                if (!batch.Any())
+                {
+                    break;
+                }
+
+                batches.Add(batch);
+            }
+
+            batches.ForEach(batchProcessor);
+        }
+    }
+[/sourcecode]
+
+<p>
+	When testing the OrderProcessor you might start by creating the following test (I use <a href="http://code.google.com/p/moq/wiki/QuickStart">Moq</a> for mocking)
+</p>
+
+[sourcecode language="csharp"]
+        [SetUp]
+        public void SetUp()
+        {
+            _orderBatcher = new Mock<IOrderBatcher>();
+            _orderSender = new Mock<IOrderSender>();
+            _orderRecorder = new Mock<IOrderRecorder>();
+
+            _orderProcessor = new OrderProcessor(_orderBatcher.Object, _orderSender.Object, _orderRecorder.Object);            
+        }
+		
+        [Test]
+        public void when_processing_orders_in_batches()
+        {
+            var orders = new List<Order>();
+
+            _orderProcessor.Process(orders, true);
+
+            _orderBatcher.Verify(x => x.ProcessBatches(orders, It.IsAny<Action<List<Order>>>()), "It should process the order in batches");
+        }
+[/sourcecode]
+
+<p>
+	The test above isn't good enough as it doesn't check that the correct Action is passed to the OrderBatcher. Fortunately Moq makes it simple to get a handle on the Action that is passed to the OrderBatcher, and once we have access to the Action the easiest way of verifying that it is correct is by executing it and using Moq to make sure that it has made the correct calls.
+	
+	The code below shows how to do this, it uses Moq's Callback functionality which allows access to the parameters passed to the method, we store the value of the Action parameter in a local variable
+	
+	[sourcecode language="csharp"]
+            Action<List<Order>> batchProcessor = null;
+            _orderBatcher.Setup(x => x.ProcessBatches(orders, It.IsAny<Action<List<Order>>>())).Callback<List<Order>, Action<List<Order>>>((x, y) => batchProcessor = y);
+	[/sourcecode]
+	
+	Now we have access to the Action we need to execute it and verify that it behaves correctly, as shown
+	
+	[sourcecode language="csharp"]
+            batchProcessor(orders);
+            _orderSender.Verify(x => x.Send(orders), "It should send the orders");
+            _orderRecorder.Verify(x => x.OrderSent(order1), "It should record the 1st order");
+            _orderRecorder.Verify(x => x.OrderSent(order2), "It should record the 2nd order");
+	[/sourcecode]
+	
+	The complete test is shown below
+</p>
+
+[sourcecode language="csharp"]
+        [SetUp]
+        public void SetUp()
+        {
+            _orderBatcher = new Mock<IOrderBatcher>();
+            _orderSender = new Mock<IOrderSender>();
+            _orderRecorder = new Mock<IOrderRecorder>();
+
+            _orderProcessor = new OrderProcessor(_orderBatcher.Object, _orderSender.Object, _orderRecorder.Object);            
+        }
+		
+        [Test]
+        public void when_processing_orders_in_batches()
+        {
+            var order1 = new Order();
+            var order2 = new Order();
+            var orders = new List<Order> {order1, order2};
+
+            Action<List<Order>> batchProcessor = null;
+            _orderBatcher.Setup(x => x.ProcessBatches(orders, It.IsAny<Action<List<Order>>>())).Callback<List<Order>, Action<List<Order>>>((x, y) => batchProcessor = y);
+
+            _orderProcessor.Process(orders, true);
+
+            _orderBatcher.Verify(x => x.ProcessBatches(orders, batchProcessor), "It should process the order in batches");
+
+            batchProcessor(orders);
+            _orderSender.Verify(x => x.Send(orders), "It should send the orders");
+            _orderRecorder.Verify(x => x.OrderSent(order1), "It should record the 1st order");
+            _orderRecorder.Verify(x => x.OrderSent(order2), "It should record the 2nd order");
+        }
+[/sourcecode]
+
+<p>
+	We have successfully checked that the OrderProcessor supplies the correct Action to the OrderBatcher, now we need to verify that the OrderBatcher executes the Action correctly, the method we need to test has the following signature
+	
+	[sourcecode language="csharp"]
+		public void ProcessBatches(List<Order> orders, Action<List<Order>> batchProcessor)
+	[/sourcecode]
+	
+	When testing this method the simplest approach is to supply an Action that records how and when it was called and then verify it was called correctly, so in this example I've supplied an Action which every time it is called with a list of orders, stores them and then later in the test I verify the orders, as shown below
+</p>
+
+[sourcecode language="csharp" highlight="8,15,16,17,18"]
+        [Test]
+        public void when_processing_batches()
+        {
+            var orders = Enumerable.Range(1, 20).Select(x => new Order {Id = x}).ToList();
+
+            var batches = new List<List<Order>>();
+
+            Action<List<Order>> action = batches.Add;
+
+            var orderBatcher = new OrderBatcher();
+            orderBatcher.ProcessBatches(orders, action);
+
+            Assert.That(batches.Count, Is.EqualTo(4), "It should have processed the orders in 4 batches");
+
+            Assert.That(batches.SingleOrDefault(x => x.First().Id == 1 && x.Last().Id == 5), Is.Not.Null, "It should have processed the 1st batch");
+            Assert.That(batches.SingleOrDefault(x => x.First().Id == 6 && x.Last().Id == 10), Is.Not.Null, "It should have processed the 2nd batch");
+            Assert.That(batches.SingleOrDefault(x => x.First().Id == 11 && x.Last().Id == 15), Is.Not.Null, "It should have processed the 3rd batch");
+            Assert.That(batches.SingleOrDefault(x => x.First().Id == 16 && x.Last().Id == 20), Is.Not.Null, "It should have processed the 4th batch");
+        }
+[/sourcecode]
+
+<p>
+	The code for this post is available on <a href="https://github.com/odw1/Blog/tree/master/TestingActions">github</a>.
+</p>
